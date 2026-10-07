@@ -71,7 +71,7 @@ jobs:
         run: |
           export SOURCE_DATE_EPOCH=1650320000
 
-          make image PROFILE="tplink_tl-wr940n-v6"
+          make image PROFILE="tplink_tl-wr940n-v6" FORCE=1
 
       - name: Show generated firmware
         run: |
