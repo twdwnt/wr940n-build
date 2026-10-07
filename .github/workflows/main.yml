@@ -22,7 +22,7 @@ jobs:
         working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
         run: |
           export SOURCE_DATE_EPOCH=1650320000
-          make image PROFILE="tplink_tl-wr940n-v6"
+          make image PROFILE="tplink_tl-wr940n-v6" FORCE=1
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
