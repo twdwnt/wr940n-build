@@ -1,0 +1,92 @@
+name: FINAL WR940N v6 Firmware Build
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+
+    steps:
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wget tar xz-utils file rsync python3 build-essential
+
+      - name: Download OpenWrt ImageBuilder
+        run: |
+          wget -q https://downloads.openwrt.org/releases/19.07.10/targets/ath79/tiny/openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz
+
+          echo "Checking SHA256..."
+          echo "1baee7ce68377f14dc3a3042e70b6ad586fb3da5c1ea04fd7b8c11d6e1e91dd1  openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz" | sha256sum -c -
+
+          tar -xf openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz
+
+      - name: Remove Python 2 prerequisite
+        working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("include/prereq-build.mk")
+          s = p.read_text()
+
+          start_marker = "$(eval $(call SetupHostCommand,python,Please install Python 2.x"
+          end_marker = "python -V 2>&1 | grep Python))"
+
+          start = s.find(start_marker)
+
+          if start == -1:
+              raise SystemExit(
+                  "ERROR: Python 2 prerequisite block was not found."
+              )
+
+          end = s.find(end_marker, start)
+
+          if end == -1:
+              raise SystemExit(
+                  "ERROR: End of Python 2 prerequisite block was not found."
+              )
+
+          end += len(end_marker)
+
+          s = s[:start] + s[end:]
+          p.write_text(s)
+
+          print("Python 2 prerequisite removed successfully.")
+
+          if "Please install Python 2.x" in p.read_text():
+              raise SystemExit(
+                  "ERROR: Python 2 prerequisite is STILL present."
+              )
+
+          print("VERIFIED: Python 2 prerequisite is gone.")
+          PY
+
+      - name: Verify ImageBuilder
+        working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
+        run: |
+          echo "Checking ImageBuilder..."
+          test -f Makefile
+          test -f include/prereq-build.mk
+          echo "ImageBuilder verification OK."
+
+      - name: Build WR940N v6 firmware
+        working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
+        run: |
+          export SOURCE_DATE_EPOCH=1650320000
+          make FORCE=1 image PROFILE="tplink_tl-wr940n-v6"
+
+      - name: List firmware files
+        run: |
+          echo "===== GENERATED FIRMWARE ====="
+          find openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/targets/ath79/tiny -maxdepth 1 -type f -print
+          echo "=============================="
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: WR940N-v6-FIRMWARE
+          path: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/targets/ath79/tiny/*
+          if-no-files-found: error
