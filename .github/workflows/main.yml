@@ -5,28 +5,81 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-22.04
 
     steps:
+
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y xz-utils wget tar
+          sudo apt-get install -y \
+            wget \
+            tar \
+            xz-utils \
+            file \
+            rsync \
+            python3 \
+            build-essential
 
       - name: Download ImageBuilder
         run: |
           wget -q https://downloads.openwrt.org/releases/19.07.10/targets/ath79/tiny/openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz
+
+          echo "Checking SHA256..."
+          echo "1baee7ce68377f14dc3a3042e70b6ad586fb3da5c1ea04fd7b8c11d6e1e91dd1  openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz" | sha256sum -c -
+
           tar -xf openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz
+
+      - name: Remove obsolete Python 2 prerequisite
+        working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          p = Path("include/prereq-build.mk")
+          s = p.read_text()
+
+          start = s.find(
+              "$(eval $(call SetupHostCommand,python,Please install Python 2.x"
+          )
+
+          if start == -1:
+              print("Python 2 prerequisite was not found. Continuing.")
+          else:
+              end = s.find("))", start)
+
+              if end == -1:
+                  raise SystemExit("Could not find end of Python 2 prerequisite block.")
+
+              end += 2
+              s = s[:start] + s[end:]
+              p.write_text(s)
+
+              print("Python 2 prerequisite removed successfully.")
+
+      - name: Verify ImageBuilder
+        working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
+        run: |
+          echo "Checking ImageBuilder..."
+          test -f Makefile
+          test -d include
+          test -f include/prereq-build.mk
+          echo "ImageBuilder OK."
 
       - name: Build firmware
         working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
         run: |
           export SOURCE_DATE_EPOCH=1650320000
-          make image PROFILE="tplink_tl-wr940n-v6" 
-          sed -i '135,138d' include/prereq-build.mk
+
           make image PROFILE="tplink_tl-wr940n-v6"
+
+      - name: Show generated firmware
+        run: |
+          echo "Generated firmware files:"
+          find openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/targets/ath79/tiny -type f -maxdepth 1 -print
+
       - name: Upload firmware
         uses: actions/upload-artifact@v4
         with:
           name: WR940N-v6-firmware
-          path: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/**
+          path: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/targets/ath79/tiny/*
