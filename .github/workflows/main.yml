@@ -30,7 +30,7 @@ jobs:
 
           tar -xf openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz
 
-      - name: Remove obsolete Python 2 prerequisite
+      - name: Remove Python 2 prerequisite
         working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
         run: |
           python3 - <<'PY'
@@ -39,23 +39,35 @@ jobs:
           p = Path("include/prereq-build.mk")
           s = p.read_text()
 
-          start = s.find(
-              "$(eval $(call SetupHostCommand,python,Please install Python 2.x"
-          )
+          marker = "$(eval $(call SetupHostCommand,python,Please install Python 2.x"
+
+          start = s.find(marker)
 
           if start == -1:
-              print("Python 2 prerequisite was not found. Continuing.")
+              print("Python 2 prerequisite not found.")
           else:
-              end = s.find("))", start)
+              end_marker = "python -V 2>&1 | grep Python))"
+              end = s.find(end_marker, start)
 
               if end == -1:
-                  raise SystemExit("Could not find end of Python 2 prerequisite block.")
+                  raise SystemExit(
+                      "ERROR: Python 2 prerequisite found but its end could not be located."
+                  )
 
-              end += 2
+              end += len(end_marker)
+
               s = s[:start] + s[end:]
               p.write_text(s)
 
-              print("Python 2 prerequisite removed successfully.")
+              print("Python 2 prerequisite removed.")
+
+          if "Please install Python 2.x" in p.read_text():
+              raise SystemExit(
+                  "ERROR: Python 2 prerequisite is STILL present."
+              )
+
+          print("Verified: Python 2 prerequisite is gone.")
+          PY
 
       - name: Verify ImageBuilder
         working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
@@ -70,13 +82,12 @@ jobs:
         working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
         run: |
           export SOURCE_DATE_EPOCH=1650320000
-
-          make image PROFILE="tplink_tl-wr940n-v6" FORCE=1
+          make FORCE=1 image PROFILE="tplink_tl-wr940n-v6"
 
       - name: Show generated firmware
         run: |
           echo "Generated firmware files:"
-          find openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/targets/ath79/tiny -type f -maxdepth 1 -print
+          find openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/targets/ath79/tiny -maxdepth 1 -type f -print
 
       - name: Upload firmware
         uses: actions/upload-artifact@v4
