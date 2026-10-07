@@ -1,0 +1,31 @@
+name: Build OpenWrt WR940N v6
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xz-utils wget tar
+
+      - name: Download ImageBuilder
+        run: |
+          wget -q https://downloads.openwrt.org/releases/19.07.10/targets/ath79/tiny/openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz
+          tar -xf openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64.tar.xz
+
+      - name: Build firmware
+        working-directory: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64
+        run: |
+          export SOURCE_DATE_EPOCH=1650320000
+          make image PROFILE="tplink_tl-wr940n-v6"
+
+      - name: Upload firmware
+        uses: actions/upload-artifact@v4
+        with:
+          name: WR940N-v6-firmware
+          path: openwrt-imagebuilder-19.07.10-ath79-tiny.Linux-x86_64/bin/**
